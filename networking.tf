@@ -1,0 +1,110 @@
+# Declare the availability zone data source 
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+### Create the VPC
+resource "aws_vpc" "main" {
+  cidr_block       = var.vpc_cidr
+  instance_tenancy = "default"
+
+  tags = {
+    Name = "ecs-project-main_vpc"
+  }
+}
+
+### Create the public subnet - 2 
+resource "aws_subnet" "public" {
+  count = var.subnet_count  
+  vpc_id     = aws_vpc.main.id
+  cidr_block = cidrsubnet(var.vpc_cidr, 8, count.index)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = "ecs-project-public_subnet-${count.index}"
+  }
+}
+
+### Create internet gateway
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "ecs-project-main_igw"
+  }
+}
+
+### Public route table
+resource "aws_route_table" "rtb-public" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "ecs-project-Public-RT"
+  }
+}
+
+# Add the route to the public route table
+resource "aws_route" "rtb-public-route" {
+  route_table_id         = aws_route_table.rtb-public.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.igw.id
+}
+
+resource "aws_route_table_association" "pub-rtb-asoc" {
+  count = var.subnet_count
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.rtb-public.id
+}
+
+### Create the private subnet
+resource "aws_subnet" "private" {
+  count = var.subnet_count  
+  vpc_id     = aws_vpc.main.id
+  cidr_block = cidrsubnet(var.vpc_cidr, 8, count.index + 2)
+
+  tags = {
+    Name = "ecs-project-private_subnet-${count.index}"
+  }
+}
+
+### Create EIP for NAT Gateway
+resource "aws_eip" "eip" {
+  domain = "vpc"
+
+  tags = {
+    Name = "ecs-project-eip"
+  }
+}
+
+### Create NAT Gateway
+resource "aws_nat_gateway" "ngw" {
+  allocation_id = aws_eip.eip.id
+  subnet_id     = aws_subnet.public[0].id
+
+  tags = {
+    Name = "ecs-project-NAT"
+  }
+}
+
+### Private route table
+resource "aws_route_table" "rtb-private" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "ecs-project-Private-RT"
+  }
+}
+
+resource "aws_route" "rtb-private-route" {
+  route_table_id         = aws_route_table.rtb-private.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_nat_gateway.ngw.id
+}
+
+resource "aws_route_table_association" "priv-rtb-asoc" {
+  count = var.subnet_count
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.rtb-private.id
+}
+
