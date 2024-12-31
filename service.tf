@@ -14,7 +14,7 @@ resource "aws_ecs_service" "ecs_project_service" {
   load_balancer {
     target_group_arn = aws_lb_target_group.ecs-project-target-group.arn
     container_name   = "ecs-project-webapp"
-    container_port   = 80
+    container_port   = 5000
   }
 
   depends_on = [aws_lb_listener.ecs-project-listener]
