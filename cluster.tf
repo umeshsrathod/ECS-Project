@@ -4,7 +4,7 @@ resource "aws_ecs_cluster" "ecs-project-cluster" {
 
   setting {
     name  = "containerInsights"
-    value = "enabled"
+    value = "enhanced"
   }
 
   tags = {
